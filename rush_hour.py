@@ -1,5 +1,6 @@
 from codecs import StreamReader
 from multiprocessing.dummy import Array
+from shutil import move
 from z3 import *
 import sys
 import csv
@@ -47,8 +48,9 @@ print(row_cars)
 print(col_cars)
 
 # time -> row -> car -> array of bools
-row_car_vars = [move_limit]
+row_car_vars = []
 for i in range(move_limit+1):
+    row_car_vars.append(None)
     row_car_vars[i] = []
     for r in range(len(row_cars)):
         row = row_cars[r]
@@ -60,9 +62,11 @@ for i in range(move_limit+1):
             for k in range(size):
                 row_car_vars[i][r][c].append(Bool("y"))
 
-col_car_vars = [move_limit+1]
 
+# time -> col -> car -> array of bools
+col_car_vars = [move_limit+1]
 for i in range(move_limit+1):
+    col_car_vars.append(None)
     col_car_vars[i] = []
     for r in range(len(col_cars)):
         col = col_cars[r]
@@ -73,3 +77,16 @@ for i in range(move_limit+1):
             col_car_vars[i][r].append([])
             for k in range(size):
                 col_car_vars[i][r][c].append(Bool("y"))
+
+# time -> row -> col -> direction
+moves = []
+for i in range(move_limit):
+    moves.append(None)
+    moves[i] = []
+    for j in range(size):
+        moves[i].append(None)
+        moves[i][j] = []
+        for k in range(size):
+            moves[i][j].append(None)
+            moves[i][j][k] = (Bool("left"), Bool(
+                "right"), Bool("up"), Bool("down"))
