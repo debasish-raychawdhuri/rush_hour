@@ -112,8 +112,8 @@ for i in range(move_limit):
             for car in col_car_vars_for_col:
                 vs.append(car[j])
 
-            clauses.append(Or(Not(moves[i][j][k][2])), *vs)
-            clauses.append(Or(Not(moves[i][j][k][3])), *vs)
+            clauses.append(Or(Not(moves[i][j][k][2]), *vs))
+            clauses.append(Or(Not(moves[i][j][k][3]), *vs))
 
 # effect of a move - move the car
 for i in range(move_limit):
@@ -122,28 +122,31 @@ for i in range(move_limit):
             m = moves[i][j][k]
             row_car_vars_for_row = row_car_vars[i][j]
 
-            for car in row_car_vars_for_row:
+            for ci in range(len(row_car_vars_for_row)):
+                car = row_car_vars_for_row[ci]
                 car_k = car[k]
-
-                if j != 0:
-                    clauses.append(
-                        Or(Not(car_k), Not(move[i][j][k][0]), row_car_vars[i+1][j-1]))
-                if j < size-1:
-                    clauses.append(
-                        Or(Not(car_k), Not(move[i][j][k][1]), row_car_vars[i+1][j+1]))
-
-            col_car_vars_for_col = row_car_vars[i][k]
-            for car in col_car_vars_for_col:
-                car_j = car[j]
 
                 if k != 0:
                     clauses.append(
-                        Or(Not(car_j), Not(move[i][j][k][2]), row_car_vars[i+1][k-1]))
+                        Or(Not(car_k), Not(moves[i][j][k][0]), row_car_vars[i+1][j][ci][k-1]))
                 if k < size-1:
                     clauses.append(
-                        Or(Not(car_j), Not(move[i][j][k][3]), row_car_vars[i+1][k+1]))
+                        Or(Not(car_k), Not(moves[i][j][k][1]), row_car_vars[i+1][j][ci][k+1]))
+
+            col_car_vars_for_col = col_car_vars[i][k]
+            for ci in range(len(col_car_vars_for_col)):
+                car = col_car_vars_for_col[ci]
+                car_j = car[j]
+
+                if j != 0:
+                    clauses.append(
+                        Or(Not(car_j), Not(moves[i][j][k][2]), col_car_vars[i+1][k][ci][j-1]))
+                if j < size-1:
+                    clauses.append(
+                        Or(Not(car_j), Not(moves[i][j][k][3]), col_car_vars[i+1][k][ci][j+1]))
 
 # cars don't step on a mine
 for i in range(move_limit):
     for mine in mines:
         (j, k) = mine
+        row_car_vars[i][j][k]
