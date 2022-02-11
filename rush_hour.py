@@ -30,6 +30,7 @@ with open(sys.argv[1], newline='') as csvfile:
     red_car_row = int(row[0])
     red_cor_col = int(row[1])
     red_pos = (red_car_row, red_cor_col)
+    # The red car is the first car in it's row.
     row_cars[red_car_row].append(red_cor_col)
     for row in strreader:
         orientation = int(row[0])
@@ -159,8 +160,22 @@ for i in range(move_limit):
                 clauses.append(
                     Or(Not(car_j), *no_moves, col_car_vars[i+1][k][ci][j]))
 
+# The red car can only be at one position at a time
+
+red_row = red_pos[0]
+
+for i in range(move_limit+1):
+    red_bool = Bool("red[%s]" % (i))
+    red_cols = row_car_vars[i][red_row][0]
+    for k in range(size):
+        new_red_bool = Bool("red[%s][%s]" % (i, k))
+        clauses.append(Or(Not(red_bool), new_red_bool))
+        clauses.append(Or(Not(red_cols[k]), new_red_bool))
+        clauses.append(Or(Not(red_bool), Not(red_cols[k])))
+        red_bool = new_red_bool
+
 # cars don't step on a mine
-for i in range(move_limit):
+for i in range(move_limit+1):
     for mine in mines:
         (j, k) = mine
         for car in row_car_vars[i][j]:
