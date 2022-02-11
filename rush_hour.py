@@ -60,7 +60,8 @@ for i in range(move_limit+1):
             # cars are arranged by rows for use later
             row_car_vars[i][r].append([])
             for k in range(size):
-                row_car_vars[i][r][c].append(Bool("y"))
+                row_car_vars[i][r][c].append(
+                    Bool("row_car_vars[%s][%s][%s][%s]" % (i, r, c, k)))
 
 
 # time -> col -> car -> array of bools
@@ -76,7 +77,8 @@ for i in range(move_limit+1):
             # cars are arranged by rows for use later
             col_car_vars[i][r].append([])
             for k in range(size):
-                col_car_vars[i][r][c].append(Bool("y"))
+                col_car_vars[i][r][c].append(
+                    Bool("col_car_vars[%s][%s][%s][%s]" % (i, r, c, k)))
 
 # time -> row -> col -> direction
 moves = []
@@ -88,8 +90,8 @@ for i in range(move_limit):
         moves[i][j] = []
         for k in range(size):
             moves[i][j].append(None)
-            moves[i][j][k] = (Bool("left"), Bool(
-                "right"), Bool("up"), Bool("down"))
+            moves[i][j][k] = (Bool("moves[%s][%s][%s]left" % (i, j, k)), Bool(
+                "moves[%s][%s][%s]right" % (i, j, k)), Bool("moves[%s][%s][%s]up" % (i, j, k)), Bool("moves[%s][%s][%s]down" % (i, j, k)))
 
 # Time to add the conditions in CNF
 clauses = []
@@ -116,6 +118,7 @@ for i in range(move_limit):
             clauses.append(Or(Not(moves[i][j][k][3]), *vs))
 
 # effect of a move - move the car
+# or keep the car in the same place if no move
 for i in range(move_limit):
     for j in range(size):
         for k in range(size):
@@ -129,9 +132,13 @@ for i in range(move_limit):
                 if k != 0:
                     clauses.append(
                         Or(Not(car_k), Not(moves[i][j][k][0]), row_car_vars[i+1][j][ci][k-1]))
+                    clauses.append(
+                        Or(Not(car_k), moves[i][j][k][0], row_car_vars[i+1][j][ci][k]))
                 if k < size-1:
                     clauses.append(
                         Or(Not(car_k), Not(moves[i][j][k][1]), row_car_vars[i+1][j][ci][k+1]))
+                    clauses.append(
+                        Or(Not(car_k), moves[i][j][k][1], row_car_vars[i+1][j][ci][k]))
 
             col_car_vars_for_col = col_car_vars[i][k]
             for ci in range(len(col_car_vars_for_col)):
@@ -141,9 +148,13 @@ for i in range(move_limit):
                 if j != 0:
                     clauses.append(
                         Or(Not(car_j), Not(moves[i][j][k][2]), col_car_vars[i+1][k][ci][j-1]))
+                    clauses.append(
+                        Or(Not(car_j), moves[i][j][k][2], col_car_vars[i+1][k][ci][j]))
                 if j < size-1:
                     clauses.append(
                         Or(Not(car_j), Not(moves[i][j][k][3]), col_car_vars[i+1][k][ci][j+1]))
+                    clauses.append(
+                        Or(Not(car_j), moves[i][j][k][3], col_car_vars[i+1][k][ci][j]))
 
 # cars don't step on a mine
 for i in range(move_limit):
@@ -154,4 +165,46 @@ for i in range(move_limit):
         for car in col_car_vars[i][k]:
             clauses.append(Not(car[j]))
 
-# cars don't collide
+# cars don't collide, a.k.a. for every time slot, for every
+# squre, there should be only one car in it.
+
+# time -> row -> column -> (1+row_cars + col_cars)
+square_threads = []
+for i in range(move_limit+1):
+    square_threads.append(None)
+    square_threads[i] = []
+    for j in range(size):
+        square_threads[i].append(None)
+        square_threads[i][j] = []
+        for k in range(size):
+            square_threads[i][j].append(None)
+            square_threads[i][j][k] = [
+                Bool("square_threads[%s][%s][%s]" % (i, j, k))]
+            old_thread = square_threads[i][j][k][0]
+            for car in row_car_vars[i][j]:
+                car_var = car[k]
+                clauses.append(Or(Not(old_thread), Not(car_var)))
+                new_thread = Bool(
+                    "square_threads[%s][%s][%s][%s]" % (i, j, k, car_var))
+                clauses.append(Or(Not(old_thread), new_thread))
+                clauses.append(Or(Not(car_var), new_thread))
+                if k > 0:
+                    car_var_left = car[k-1]
+                    clauses.append(Or(Not(old_thread), Not(car_var_left)))
+                    clauses.append(Or(Not(car_var_left), Not(car_var)))
+                old_thread = new_thread
+            for car in col_car_vars[i][k]:
+                car_var = car[j]
+                clauses.append(Or(Not(old_thread), Not(car_var)))
+                new_thread = Bool("square_threads[%s][%s][%s][%s]" % (
+                    i, j, k, car_var))
+                clauses.append(Or(Not(old_thread), new_thread))
+                clauses.append(Or(Not(car_var), new_thread))
+                if j > 0:
+                    car_var_up = car[j-1]
+                    clauses.append(Or(Not(old_thread), Not(car_var_up)))
+                    clauses.append(Or(Not(car_var_up), Not(car_var)))
+                old_thread = new_thread
+
+
+# Initial and final conditions
