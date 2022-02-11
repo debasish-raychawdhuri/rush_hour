@@ -149,4 +149,9 @@ for i in range(move_limit):
 for i in range(move_limit):
     for mine in mines:
         (j, k) = mine
-        row_car_vars[i][j][k]
+        for car in row_car_vars[i][j]:
+            clauses.append(Not(car[k]))
+        for car in col_car_vars[i][k]:
+            clauses.append(Not(car[j]))
+
+# cars don't collide
