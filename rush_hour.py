@@ -27,9 +27,10 @@ with open(sys.argv[1], newline='') as csvfile:
         col_cars[r] = []
 
     row = next(strreader)
-    red_car_x = int(row[0])
-    red_cor_y = int(row[1])
-    red_pos = (red_car_x, red_cor_y)
+    red_car_row = int(row[0])
+    red_cor_col = int(row[1])
+    red_pos = (red_car_row, red_cor_col)
+    row_cars[red_car_row].append(red_cor_col)
     for row in strreader:
         orientation = int(row[0])
         r = int(row[1])
@@ -40,6 +41,7 @@ with open(sys.argv[1], newline='') as csvfile:
             col_cars[c].append(r)
         else:
             mines.append((r, c))
+
 
 print(red_pos)
 print(mines)
@@ -128,33 +130,34 @@ for i in range(move_limit):
             for ci in range(len(row_car_vars_for_row)):
                 car = row_car_vars_for_row[ci]
                 car_k = car[k]
-
+                no_moves = []
                 if k != 0:
                     clauses.append(
                         Or(Not(car_k), Not(moves[i][j][k][0]), row_car_vars[i+1][j][ci][k-1]))
-                    clauses.append(
-                        Or(Not(car_k), moves[i][j][k][0], row_car_vars[i+1][j][ci][k]))
+                    no_moves.append(moves[i][j][k][0])
                 if k < size-1:
                     clauses.append(
                         Or(Not(car_k), Not(moves[i][j][k][1]), row_car_vars[i+1][j][ci][k+1]))
-                    clauses.append(
-                        Or(Not(car_k), moves[i][j][k][1], row_car_vars[i+1][j][ci][k]))
+                    no_moves.append(moves[i][j][k][1])
+
+                clauses.append(
+                    Or(Not(car_k), *no_moves, row_car_vars[i+1][j][ci][k]))
 
             col_car_vars_for_col = col_car_vars[i][k]
             for ci in range(len(col_car_vars_for_col)):
                 car = col_car_vars_for_col[ci]
                 car_j = car[j]
-
+                no_moves = []
                 if j != 0:
                     clauses.append(
                         Or(Not(car_j), Not(moves[i][j][k][2]), col_car_vars[i+1][k][ci][j-1]))
-                    clauses.append(
-                        Or(Not(car_j), moves[i][j][k][2], col_car_vars[i+1][k][ci][j]))
+                    no_moves.append(moves[i][j][k][2])
                 if j < size-1:
                     clauses.append(
                         Or(Not(car_j), Not(moves[i][j][k][3]), col_car_vars[i+1][k][ci][j+1]))
-                    clauses.append(
-                        Or(Not(car_j), moves[i][j][k][3], col_car_vars[i+1][k][ci][j]))
+                    no_moves.append(moves[i][j][k][3])
+                clauses.append(
+                    Or(Not(car_j), *no_moves, col_car_vars[i+1][k][ci][j]))
 
 # cars don't step on a mine
 for i in range(move_limit):
@@ -165,8 +168,22 @@ for i in range(move_limit):
         for car in col_car_vars[i][k]:
             clauses.append(Not(car[j]))
 
+# Only one move per move
+
+
+for i in range(move_limit):
+    v = Bool("movesss")
+    for j in range(size):
+        for k in range(size):
+            for l in range(4):
+                nv = Bool("movesss[%s][%s][%s][%s]" % (i, j, k, l))
+                clauses.append(Or(Not(v), Not(moves[i][j][k][l])))
+                clauses.append(Or(Not(v), nv))
+                clauses.append(Or(Not(moves[i][j][k][l]), nv))
+                v = nv
+
 # cars don't collide, a.k.a. for every time slot, for every
-# squre, there should be only one car in it.
+# square, there should be only one car in it.
 
 # time -> row -> column -> (1+row_cars + col_cars)
 square_threads = []
@@ -208,3 +225,27 @@ for i in range(move_limit+1):
 
 
 # Initial and final conditions
+for j in range(size):
+    row = row_cars[j]
+    for c in range(len(row)):
+        k = row[c]
+        clauses.append(row_car_vars[0][j][c][k])
+for k in range(size):
+    col = col_cars[k]
+    for c in range(len(col)):
+        j = col[c]
+        clauses.append(col_car_vars[0][k][c][j])
+row_car_vars[move_limit][red_pos[0]][0][size-2]
+
+solver = Solver()
+solver.add(And(*clauses))
+if solver.check() == sat:
+    model = solver.model()
+    for i in range(move_limit):
+        for j in range(size):
+            for k in range(size):
+                for l in range(4):
+                    if model[moves[i][j][k][l]] == True:
+                        print(moves[i][j][k][l])
+else:
+    print("unsat")
