@@ -273,11 +273,9 @@ for i in range(move_limit+1):
 for i in range(move_limit+1):
     for j in range(size):
         clauses.append(Not(square_threads_row[i][j][size-1]))
-        clauses.append(Not(square_threads_row[i][j][size-2]))
 for i in range(move_limit+1):
     for k in range(size):
         clauses.append(Not(square_threads_col[i][size-1][k]))
-        clauses.append(Not(square_threads_col[i][size-2][k]))
 for i in range(move_limit+1):
     for j in range(size):
         for k in range(size):
