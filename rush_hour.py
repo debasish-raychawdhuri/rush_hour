@@ -208,8 +208,12 @@ for i in range(move_limit+1):
         (j, k) = mine
         for car in row_car_vars[i][j]:
             clauses.append(Not(car[k]))
+            if k < size-1:
+                clauses.append(Not(car[k+1]))
         for car in col_car_vars[i][k]:
             clauses.append(Not(car[j]))
+            if j < size-1:
+                clauses.append(Not(car[j+1]))
 
 # Only one move per move
 
