@@ -1,11 +1,12 @@
 from codecs import StreamReader
 from multiprocessing.dummy import Array
 from shutil import move
+from traceback import print_tb
 from z3 import *
 import sys
 import csv
 from xmlrpc.client import Boolean
-#print('Argument List:', str(sys.argv[0]))
+# print('Argument List:', str(sys.argv[0]))
 
 row_cars = []
 col_cars = []
@@ -13,6 +14,7 @@ mines = []
 red_pos = ""
 size = 0
 move_limit = 0
+total_cars = 1
 
 with open(sys.argv[1], newline='') as csvfile:
     strreader = csv.reader(csvfile, delimiter=',', quotechar='|')
@@ -36,6 +38,7 @@ with open(sys.argv[1], newline='') as csvfile:
         orientation = int(row[0])
         r = int(row[1])
         c = int(row[2])
+        total_cars += 1
         if orientation == 1:
             row_cars[r].append(c)
         elif orientation == 0:
@@ -225,46 +228,74 @@ for i in range(move_limit):
 # cars don't collide, a.k.a. for every time slot, for every
 # square, there should be only one car in it.
 
+
 # time -> row -> column -> (1+row_cars + col_cars)
-square_threads = []
+# first remember the position of only the current row and column
+square_threads_row = []
+square_threads_col = []
 for i in range(move_limit+1):
-    square_threads.append(None)
-    square_threads[i] = []
+    square_threads_row.append(None)
+    square_threads_row[i] = []
+    square_threads_col.append(None)
+    square_threads_col[i] = []
     for j in range(size):
-        square_threads[i].append(None)
-        square_threads[i][j] = []
+        square_threads_row[i].append(None)
+        square_threads_row[i][j] = []
+        square_threads_col[i].append(None)
+        square_threads_col[i][j] = []
         for k in range(size):
-            square_threads[i][j].append(None)
-            square_threads[i][j][k] = [
-                Bool("square_threads[%s][%s][%s]" % (i, j, k))]
-            old_thread = square_threads[i][j][k][0]
+            square_threads_row[i][j].append(None)
+            square_threads_row[i][j][k] = Bool(
+                "square_threads_row[%s][%s][%s]" % (i, j, k))
+            square_threads_col[i][j].append(None)
+            square_threads_col[i][j][k] = Bool(
+                "square_threads_col[%s][%s][%s]" % (i, j, k))
             for car in row_car_vars[i][j]:
-                car_var = car[k]
-                clauses.append(Or(Not(old_thread), Not(car_var)))
+                car_k = car[k]
+                old_thread = square_threads_row[i][j][k]
                 new_thread = Bool(
-                    "square_threads[%s][%s][%s][%s]" % (i, j, k, car_var))
+                    "square_threads_row[%s][%s][%s][%s]" % (i, j, k, car))
                 clauses.append(Or(Not(old_thread), new_thread))
-                clauses.append(Or(Not(car_var), new_thread))
-                if k > 0:
-                    car_var_left = car[k-1]
-                    clauses.append(Or(Not(old_thread), Not(car_var_left)))
-                    clauses.append(Or(Not(car_var_left), Not(car_var)))
-                old_thread = new_thread
+                clauses.append(Or(Not(car_k), new_thread))
+                clauses.append(Or(Not(old_thread), Not(car_k)))
+                square_threads_row[i][j][k] = new_thread
             for car in col_car_vars[i][k]:
-                car_var = car[j]
-                clauses.append(Or(Not(old_thread), Not(car_var)))
-                new_thread = Bool("square_threads[%s][%s][%s][%s]" % (
-                    i, j, k, car_var))
+                car_j = car[j]
+                old_thread = square_threads_col[i][j][k]
+                new_thread = Bool(
+                    "square_threads_col[%s][%s][%s][%s]" % (i, j, k, car))
                 clauses.append(Or(Not(old_thread), new_thread))
-                clauses.append(Or(Not(car_var), new_thread))
-                if j > 0:
-                    car_var_up = car[j-1]
-                    clauses.append(Or(Not(old_thread), Not(car_var_up)))
-                    clauses.append(Or(Not(car_var_up), Not(car_var)))
-                old_thread = new_thread
+                clauses.append(Or(Not(car_j), new_thread))
+                clauses.append(Or(Not(old_thread), Not(car_j)))
+                square_threads_col[i][j][k] = new_thread
 
+# Now we disallow collision between different rows and columns
+for i in range(move_limit+1):
+    for j in range(size):
+        clauses.append(Not(square_threads_row[i][j][size-1]))
+for i in range(move_limit+1):
+    for k in range(size):
+        clauses.append(Not(square_threads_col[i][size-1][k]))
+for i in range(move_limit+1):
+    for j in range(size):
+        for k in range(size):
+            clauses.append(
+                Or(Not(square_threads_row[i][j][k]), Not(square_threads_col[i][j][k])))
+            if j > 0:
+                clauses.append(
+                    Or(Not(square_threads_row[i][j][k]), Not(square_threads_col[i][j-1][k])))
+                clauses.append(
+                    Or(Not(square_threads_col[i][j-1][k]), Not(square_threads_col[i][j][k])))
+            if k > 0:
+                clauses.append(
+                    Or(Not(square_threads_row[i][j][k-1]), Not(square_threads_col[i][j][k])))
+                clauses.append(
+                    Or(Not(square_threads_row[i][j][k]), Not(square_threads_row[i][j][k-1])))
+            if j > 0 and k > 0:
+                clauses.append(
+                    Or(Not(square_threads_row[i][j][k-1]), Not(square_threads_col[i][j-1][k])))
 
-# Initial and final conditions
+            # Initial and final conditions
 for j in range(size):
     row = row_cars[j]
     for c in range(len(row)):
@@ -288,17 +319,32 @@ solver.add(And(*clauses))
 if solver.check() == sat:
     model = solver.model()
     for i in range(move_limit):
+        # print("=================================================")
+        # for j in range(size):
+        #     print("Row cars")
+        #     for car in row_car_vars[i][j]:
+        #         for k in car:
+        #             if model[k] == True:
+        #                 print(k)
+        # for k in range(size):
+        #     print("Col cars")
+        #     for car in col_car_vars[i][k]:
+        #         for j in car:
+        #             if model[j] == True:
+        #                 print(j)
+        # for j in range(size):
+        #     for k in range(size):
+        #         for l in range(4):
+        #             if model[moves[i][j][k][l]] == True:
+        #                 print(moves[i][j][k][l])
         for j in range(size):
             for k in range(size):
-                for l in range(4):
-                    if model[moves[i][j][k][l]] == True:
-                        print(moves[i][j][k][l])
-                # if model[moves[i][j][k][0]] == True or model[moves[i][j][k][2]] == True:
-                #     print("%s,%s" % (j, k))
-                # elif model[moves[i][j][k][1]] == True:
-                #     print("%s,%s" % (j, k+1))
-                # elif model[moves[i][j][k][3]] == True:
-                #     print("%s,%s" % (j+1, k))
+                if model[moves[i][j][k][0]] == True or model[moves[i][j][k][2]] == True:
+                    print("%s,%s" % (j, k))
+                elif model[moves[i][j][k][1]] == True:
+                    print("%s,%s" % (j, k+1))
+                elif model[moves[i][j][k][3]] == True:
+                    print("%s,%s" % (j+1, k))
 
 else:
     print("unsat")
