@@ -5,7 +5,7 @@ from z3 import *
 import sys
 import csv
 from xmlrpc.client import Boolean
-print('Argument List:', str(sys.argv[0]))
+#print('Argument List:', str(sys.argv[0]))
 
 row_cars = []
 col_cars = []
@@ -44,11 +44,11 @@ with open(sys.argv[1], newline='') as csvfile:
             mines.append((r, c))
 
 
-print(red_pos)
-print(mines)
-print()
-print(row_cars)
-print(col_cars)
+# print(red_pos)
+# print(mines)
+# print()
+# print(row_cars)
+# print(col_cars)
 
 # time -> row -> car -> array of bools
 row_car_vars = []
@@ -99,6 +99,17 @@ for i in range(move_limit):
 # Time to add the conditions in CNF
 clauses = []
 
+# Moves that never make sense
+for i in range(move_limit):
+    for j in range(size):
+        clauses.append(Not(moves[i][j][size-1][1]))
+        clauses.append(Not(moves[i][j][size-2][1]))
+        clauses.append(Not(moves[i][j][0][0]))
+    for k in range(size):
+        clauses.append(Not(moves[i][size-1][k][3]))
+        clauses.append(Not(moves[i][size-2][k][3]))
+        clauses.append(Not(moves[i][0][k][2]))
+
 # A move is only allowed if a proper kind of car is at the correct cell
 for i in range(move_limit):
     for j in range(size):
@@ -135,10 +146,14 @@ for i in range(move_limit):
                 if k != 0:
                     clauses.append(
                         Or(Not(car_k), Not(moves[i][j][k][0]), row_car_vars[i+1][j][ci][k-1]))
+                    clauses.append(
+                        Or(Not(car_k), Not(moves[i][j][k][0]), Not(row_car_vars[i+1][j][ci][k])))
                     no_moves.append(moves[i][j][k][0])
                 if k < size-1:
                     clauses.append(
                         Or(Not(car_k), Not(moves[i][j][k][1]), row_car_vars[i+1][j][ci][k+1]))
+                    clauses.append(
+                        Or(Not(car_k), Not(moves[i][j][k][1]), Not(row_car_vars[i+1][j][ci][k])))
                     no_moves.append(moves[i][j][k][1])
 
                 clauses.append(
@@ -152,27 +167,42 @@ for i in range(move_limit):
                 if j != 0:
                     clauses.append(
                         Or(Not(car_j), Not(moves[i][j][k][2]), col_car_vars[i+1][k][ci][j-1]))
+                    clauses.append(
+                        Or(Not(car_j), Not(moves[i][j][k][2]), Not(col_car_vars[i+1][k][ci][j])))
                     no_moves.append(moves[i][j][k][2])
                 if j < size-1:
                     clauses.append(
                         Or(Not(car_j), Not(moves[i][j][k][3]), col_car_vars[i+1][k][ci][j+1]))
+                    clauses.append(
+                        Or(Not(car_j), Not(moves[i][j][k][3]), Not(col_car_vars[i+1][k][ci][j])))
                     no_moves.append(moves[i][j][k][3])
                 clauses.append(
                     Or(Not(car_j), *no_moves, col_car_vars[i+1][k][ci][j]))
 
-# The red car can only be at one position at a time
-
-red_row = red_pos[0]
+# A car can only be at one place at a time
+for i in range(move_limit+1):
+    for j in range(size):
+        for car in row_car_vars[i][j]:
+            bool = Bool("red[%s][%s][%s]" % (i, j, car))
+            clauses.append(Not(car[size-1]))
+            for k in range(size):
+                new_bool = Bool("red_row[%s][%s][%s][%s]" % (i, j, car, k))
+                clauses.append(Or(Not(bool), new_bool))
+                clauses.append(Or(Not(car[k]), new_bool))
+                clauses.append(Or(Not(bool), Not(car[k])))
+                bool = new_bool
 
 for i in range(move_limit+1):
-    red_bool = Bool("red[%s]" % (i))
-    red_cols = row_car_vars[i][red_row][0]
     for k in range(size):
-        new_red_bool = Bool("red[%s][%s]" % (i, k))
-        clauses.append(Or(Not(red_bool), new_red_bool))
-        clauses.append(Or(Not(red_cols[k]), new_red_bool))
-        clauses.append(Or(Not(red_bool), Not(red_cols[k])))
-        red_bool = new_red_bool
+        for car in col_car_vars[i][k]:
+            bool = Bool("red[%s][%s][%s]" % (i, j, car))
+            clauses.append(Not(car[size-1]))
+            for j in range(size):
+                new_bool = Bool("red_col[%s][%s][%s][%s]" % (i, k, car, j))
+                clauses.append(Or(Not(bool), new_bool))
+                clauses.append(Or(Not(car[j]), new_bool))
+                clauses.append(Or(Not(bool), Not(car[k])))
+                bool = new_bool
 
 # cars don't step on a mine
 for i in range(move_limit+1):
@@ -259,8 +289,12 @@ if solver.check() == sat:
     for i in range(move_limit):
         for j in range(size):
             for k in range(size):
-                for l in range(4):
-                    if model[moves[i][j][k][l]] == True:
-                        print(moves[i][j][k][l])
+                if model[moves[i][j][k][0]] == True or model[moves[i][j][k][2]] == True:
+                    print("%s,%s" % (j, k))
+                elif model[moves[i][j][k][1]] == True:
+                    print("%s,%s" % (j+1, k))
+                elif model[moves[i][j][k][3]] == True:
+                    print("%s,%s" % (j, k+1))
+
 else:
     print("unsat")
