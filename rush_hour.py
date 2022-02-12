@@ -146,16 +146,13 @@ for i in range(move_limit):
                 if k != 0:
                     clauses.append(
                         Or(Not(car_k), Not(moves[i][j][k][0]), row_car_vars[i+1][j][ci][k-1]))
-                    clauses.append(
-                        Or(Not(car_k), Not(moves[i][j][k][0]), Not(row_car_vars[i+1][j][ci][k])))
-                    no_moves.append(moves[i][j][k][0])
+
                 if k < size-1:
                     clauses.append(
                         Or(Not(car_k), Not(moves[i][j][k][1]), row_car_vars[i+1][j][ci][k+1]))
-                    clauses.append(
-                        Or(Not(car_k), Not(moves[i][j][k][1]), Not(row_car_vars[i+1][j][ci][k])))
-                    no_moves.append(moves[i][j][k][1])
 
+                no_moves.append(moves[i][j][k][0])
+                no_moves.append(moves[i][j][k][1])
                 clauses.append(
                     Or(Not(car_k), *no_moves, row_car_vars[i+1][j][ci][k]))
 
@@ -167,15 +164,13 @@ for i in range(move_limit):
                 if j != 0:
                     clauses.append(
                         Or(Not(car_j), Not(moves[i][j][k][2]), col_car_vars[i+1][k][ci][j-1]))
-                    clauses.append(
-                        Or(Not(car_j), Not(moves[i][j][k][2]), Not(col_car_vars[i+1][k][ci][j])))
-                    no_moves.append(moves[i][j][k][2])
+
                 if j < size-1:
                     clauses.append(
                         Or(Not(car_j), Not(moves[i][j][k][3]), col_car_vars[i+1][k][ci][j+1]))
-                    clauses.append(
-                        Or(Not(car_j), Not(moves[i][j][k][3]), Not(col_car_vars[i+1][k][ci][j])))
-                    no_moves.append(moves[i][j][k][3])
+
+                no_moves.append(moves[i][j][k][2])
+                no_moves.append(moves[i][j][k][3])
                 clauses.append(
                     Or(Not(car_j), *no_moves, col_car_vars[i+1][k][ci][j]))
 
@@ -195,13 +190,13 @@ for i in range(move_limit+1):
 for i in range(move_limit+1):
     for k in range(size):
         for car in col_car_vars[i][k]:
-            bool = Bool("red[%s][%s][%s]" % (i, j, car))
+            bool = Bool("red_[%s][%s][%s]" % (i, j, car))
             clauses.append(Not(car[size-1]))
             for j in range(size):
                 new_bool = Bool("red_col[%s][%s][%s][%s]" % (i, k, car, j))
                 clauses.append(Or(Not(bool), new_bool))
                 clauses.append(Or(Not(car[j]), new_bool))
-                clauses.append(Or(Not(bool), Not(car[k])))
+                clauses.append(Or(Not(bool), Not(car[j])))
                 bool = new_bool
 
 # cars don't step on a mine
@@ -274,13 +269,19 @@ for j in range(size):
     row = row_cars[j]
     for c in range(len(row)):
         k = row[c]
+        for l in range(size):
+            if l != k:
+                clauses.append(Not(row_car_vars[0][j][c][l]))
         clauses.append(row_car_vars[0][j][c][k])
 for k in range(size):
     col = col_cars[k]
     for c in range(len(col)):
         j = col[c]
+        for l in range(size):
+            if l != j:
+                clauses.append(Not(col_car_vars[0][k][c][l]))
         clauses.append(col_car_vars[0][k][c][j])
-row_car_vars[move_limit][red_pos[0]][0][size-2]
+clauses.append(row_car_vars[move_limit][red_pos[0]][0][size-2])
 
 solver = Solver()
 solver.add(And(*clauses))
@@ -289,12 +290,15 @@ if solver.check() == sat:
     for i in range(move_limit):
         for j in range(size):
             for k in range(size):
-                if model[moves[i][j][k][0]] == True or model[moves[i][j][k][2]] == True:
-                    print("%s,%s" % (j, k))
-                elif model[moves[i][j][k][1]] == True:
-                    print("%s,%s" % (j+1, k))
-                elif model[moves[i][j][k][3]] == True:
-                    print("%s,%s" % (j, k+1))
+                for l in range(4):
+                    if model[moves[i][j][k][l]] == True:
+                        print(moves[i][j][k][l])
+                # if model[moves[i][j][k][0]] == True or model[moves[i][j][k][2]] == True:
+                #     print("%s,%s" % (j, k))
+                # elif model[moves[i][j][k][1]] == True:
+                #     print("%s,%s" % (j, k+1))
+                # elif model[moves[i][j][k][3]] == True:
+                #     print("%s,%s" % (j+1, k))
 
 else:
     print("unsat")

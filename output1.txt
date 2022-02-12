@@ -1,1 +1,10 @@
-unsat
+moves[0][2][1]left
+moves[2][3][2]right
+moves[3][3][3]right
+moves[4][1][3]down
+moves[5][2][0]right
+moves[6][2][3]down
+moves[7][3][3]down
+moves[8][2][1]right
+moves[9][2][2]right
+moves[10][2][3]right
