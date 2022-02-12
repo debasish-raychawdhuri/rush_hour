@@ -315,7 +315,7 @@ for k in range(size):
 clauses.append(row_car_vars[move_limit][red_pos[0]][0][size-2])
 
 solver = Solver()
-solver.add(And(*clauses))
+solver.add(*clauses)
 if solver.check() == sat:
     model = solver.model()
     for i in range(move_limit):
