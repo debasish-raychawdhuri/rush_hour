@@ -1,11 +1,7 @@
 from codecs import StreamReader
-from multiprocessing.dummy import Array
-from shutil import move
-from traceback import print_tb
 from z3 import *
 import sys
 import csv
-from xmlrpc.client import Boolean
 # print('Argument List:', str(sys.argv[0]))
 
 row_cars = []
